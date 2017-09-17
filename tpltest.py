@@ -9,7 +9,7 @@ import pandas as pd
 
 filename1 = '3.tpl'
 #t=tp.TplFile(filename1)
-t = tp.TplParams('')
+t = tp.TplParams('tpl/')
 t.read_data()
 print(t.df)
 

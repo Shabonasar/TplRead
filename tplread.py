@@ -167,7 +167,8 @@ class TplParams:
         self.df = pd.DataFrame()
         self.dfsuper = pd.DataFrame()
         self.key_list = ['HOLEXP', 'USFEXP', 'USL', 'USG']
-        self.pipe_list = ['Pipe-127']
+        self.pipe_list = ['Pipe-3']
+        self.flSplit = re.compile(r'[-,\s,\.]',re.IGNORECASE)
         """
         параметры трубы
         """
@@ -177,9 +178,12 @@ class TplParams:
 
     def read_data(self):
         for file in self.files:  # iterating through all files
-            fl_read = TplFile(file)  # read file            fl_read.q_liq_m3day = 23000.0
-            fl_read.q_gas_Mm3day = 17.0
-            fl_read.p_atm = 10.0
+            par = self.flSplit.split(file)
+            #print(par)
+            fl_read = TplFile(file)  # read file
+            fl_read.q_liq_m3day = float(par[2])
+            fl_read.q_gas_Mm3day = float(par[4])
+            fl_read.p_atm = float(par[6])
             fl_read.get_trend(self.key_list, self.pipe_list)
             self.file_list.update({self.file_num: fl_read})  # put reader object to dictionary
             print(file + ' read done')
