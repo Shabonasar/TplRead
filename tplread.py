@@ -33,9 +33,8 @@ class TplFile(fa.Tpl):
         self.var_num = 0
         self.file_name = filename
         self.tpl_split = re.compile(r'\'*\s*\'', re.IGNORECASE)
-        self.dict = {}
+ #       self.dict = {}
         self.df = pd.DataFrame()
-     #   self.min = 0
 
         params = self.filter_data('PIPE:')  # get all trends with PIPE:
         for i in params:
@@ -48,12 +47,14 @@ class TplFile(fa.Tpl):
 
     def extract_all(self):
         """
-        extract all columns to dataframe
+        extract all columns to DataFrame
         :return: df attribute filled with file data
         """
+        """read all data from file"""
         self.data_all = np.loadtxt(self.abspath,
                                    skiprows=self._attributes['data_idx'] + 1,
                                    unpack=True)
+        """put in in DataFrame for further manipulations"""
         self.df = pd.DataFrame(self.data_all).T
         dic = self.trends
         for v in dic:
@@ -70,16 +71,29 @@ class TplFile(fa.Tpl):
         """
 
         self.data_trends = pd.DataFrame(index=self.df.index)
-        key1 ='start'
+        key1 = 'start'
         for pipe in pipe_list:
             for key in key_list:
                 try:
-                    key1 = key+":"+pipe
+                    key1 = key + ":" + pipe
                     self.data_trends[key1] = self.df.filter(like=key+" ").filter(like=pipe).values
                 except Exception:
                     print('Error ' + key1)
+        """calculate summary data on trends extracted"""
+        self.data_trends_summary = pd.DataFrame()
+        self.data_trends_summary['mean'] = self.data_trends.mean()
+        self.data_trends_summary['min'] = self.data_trends[20:].min()
+        self.data_trends_summary['max'] = self.data_trends.max()
+        # spl = re.compile(r':', re.IGNORECASE)
+        self.data_trends_summary['key'] = self.data_trends.columns.str.split(pat=':').str[0]
+        self.data_trends_summary['point'] = self.data_trends.columns.str.split(":").str[1]
+        self.data_trends_summary['q_liq'] = self.q_liq_m3day
+        self.data_trends_summary['q_gas'] = self.q_gas_Mm3day
+        self.data_trends_summary['p_end'] = self.p_atm
         return self.data_trends
 
+
+"""
     def trend_min(self, ppnm, keyname):
         return self.getTrend(ppnm, keyname)[20:].min()
 
@@ -91,10 +105,10 @@ class TplFile(fa.Tpl):
 
 
     def read_points(self):
-        """
+        '''
         reads all the data for all points  with ppnm (pipename)
         obsolete
-        """
+        '''
         i = 0
         for ppnm in self.pipe_list:
             self.indlist = list(self.fd[self.fd['pipenum'] == ppnm].T)  # get index list with needed point
@@ -111,9 +125,9 @@ class TplFile(fa.Tpl):
         #        self.dfm['pipeName'] = ppnm   # add column with pipe name
 
     def getTrend(self, ppnm, keyname):
-        """
+        '''
         return trend by point name and keyname 
-        """
+        '''
         return self.dict[ppnm][keyname]
 
     def getMin(self, ppnm, keyname):
@@ -124,6 +138,8 @@ class TplFile(fa.Tpl):
 
     def getMean(self, ppnm, keyname):
         return self.getTrend(ppnm, keyname)[20:].mean()
+
+"""
 
 
 class TplParams:
@@ -139,17 +155,19 @@ class TplParams:
         estimate parameters variation 
         """
         self.tpl_path = pathname
-        self.fnamemask = '*.tpl'
-        self.files = glob(self.tpl_path + self.fnamemask)
+        self.file_name_mask = '*.tpl'
+        self.files = glob(self.tpl_path + self.file_name_mask)
         print(self.files)
         self.count_files = 0  # number of cases loaded
-        self.fnum = 0
-        self.f = {}
+        self.file_num = 0
+        self.file_list = {}
         self.qliqlist = set()
         self.qgaslist = set()
         self.plist = set()
         self.df = pd.DataFrame()
         self.dfsuper = pd.DataFrame()
+        self.key_list = ['HOLEXP', 'USFEXP', 'USL', 'USG']
+        self.pipe_list = ['Pipe-127']
         """
         параметры трубы
         """
@@ -157,22 +175,23 @@ class TplParams:
         self.densliq_kgm3 = 800  # плотность жидкости
         self.weight_kgm = 200  # удельный вес трубы
 
-    def readData(self):
+    def read_data(self):
+        for file in self.files:  # iterating through all files
+            fl_read = TplFile(file)  # read file            fl_read.q_liq_m3day = 23000.0
+            fl_read.q_gas_Mm3day = 17.0
+            fl_read.p_atm = 10.0
+            fl_read.get_trend(self.key_list, self.pipe_list)
+            self.file_list.update({self.file_num: fl_read})  # put reader object to dictionary
+            print(file + ' read done')
+            self.file_num = self.file_num + 1
+        df_list = []
+        for df in self.file_list.values():
+            df_list.append(df.data_trends_summary)
+        self.df = pd.concat(df_list)
+        print('read done')
 
-        for fl in self.files:  # iterating through all files
-            flread = TplFile(fl)  # read file
-            self.f.update({self.fnum: flread})  # put readed object to dictionary
-            self.qliqlist.add(flread.qliq_m3day)
-            self.qgaslist.add(flread.qgas_Mm3day)
-            self.plist.add(flread.P_atm)
-            self.df.set_value(self.fnum, 'fnum', self.fnum)
-            self.df.set_value(self.fnum, 'qliq_m3day', flread.qliq_m3day)
-            self.df.set_value(self.fnum, 'qgas_Mm3day', flread.qgas_Mm3day)
-            self.df.set_value(self.fnum, 'P_atm', flread.P_atm)
-            self.df.set_value(self.fnum, 'file', fl)
-            print(fl + ' read done')
-            self.fnum = self.fnum + 1
-            #       flparam=self.flSplit.split(fl)    # split file names
+    def collect_data(self):
+        return 1
 
     def calcData(self):
         i = 0

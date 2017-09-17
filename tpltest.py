@@ -8,13 +8,10 @@ import tplread as tp
 import pandas as pd
 
 filename1 = '3.tpl'
-t=tp.TplFile(filename1)
-t.get_trend(['HOL','HOLEXP'], ['Pipe-127'])
-m = pd.DataFrame()
-m['mean'] = t.data_trends.mean()
-m['min'] = t.data_trends[20:].min()
-m['max'] = t.data_trends.max()
-print(m)
+#t=tp.TplFile(filename1)
+t = tp.TplParams('')
+t.read_data()
+print(t.df)
 
 
 """  
@@ -22,7 +19,7 @@ print(m)
 tpl_path = '1/'
 
 tpl6 = tp.TplParams(tpl_path)
-tpl6.readData()
+tpl6.readD10ata()
 tp.calcData(tpl6)
 #print(tpl6.dfsuper)
 
