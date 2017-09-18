@@ -8,15 +8,112 @@ Created on Sat Aug  5 19:54:56 2017
 
 """
 
-import math
-import pyfas as fa
+#import pyfas as fa
+
+import os
 import pandas as pd
 from glob import glob
 import numpy as np
 import re
 
 
-class TplFile(fa.Tpl):
+"""
+Tpl class   from pyfas 
+"""
+
+class Tpl:
+    """
+    Data extraction for tpl files (OLGA >= 6.0)
+    """
+    def __init__(self, fname):
+        """
+        Initialize the tpl attributes
+        """
+        if fname.endswith(".tpl") is False:
+            raise ValueError("not a tpl file")
+        self.fname = fname.split(os.sep)[-1]
+        self.path = os.sep.join(fname.split(os.sep)[:-1])
+        if self.path == '':
+            self.abspath = self.fname
+        else:
+            self.abspath = self.path+os.sep+self.fname
+        self._attributes = {}
+        self.data = {}
+        self.label = {}
+        self.trends = {}
+        self.time = ""
+        with open(self.abspath) as fobj:
+            for idx, line in enumerate(fobj):
+                if 'CATALOG' in line:
+                    self._attributes['CATALOG'] = idx
+                    self._attributes['nvars'] = idx+1
+                if 'TIME SERIES' in line:
+                    self._attributes['data_idx'] = idx
+                    break
+                if 'CATALOG' in self._attributes:
+                    adj_idx = idx-self._attributes['CATALOG']-1
+                    if adj_idx > 0:
+                        self.trends[adj_idx] = line
+
+    def filter_data(self, pattern=''):
+        """
+        Filter available varaibles
+        """
+        filtered_trends = {}
+        with open(self.abspath) as fobj:
+            for idx, line in enumerate(fobj):
+                variable_idx = idx-self._attributes['CATALOG']-1
+                if 'TIME SERIES' in line:
+                    break
+                if pattern in line and variable_idx > 0:
+                    filtered_trends[variable_idx] = line
+        return filtered_trends
+
+    def extract(self, variable_idx):
+        """
+        Extract a specific varaible
+        """
+        self.time = np.loadtxt(self.abspath,
+                               skiprows=self._attributes['data_idx']+1,
+                               unpack=True, usecols=(0,))
+        data = np.loadtxt(self.abspath,
+                          skiprows=self._attributes['data_idx']+1,
+                          unpack=True,
+                          usecols=(variable_idx,))
+        with open(self.abspath) as fobj:
+            for idx, line in enumerate(fobj):
+                if idx == 1 + variable_idx+self._attributes['CATALOG']:
+                    try:
+                        self.data[variable_idx] = data[:len(self.time)]
+                    except TypeError:
+                        self.data[variable_idx] = data.base
+                    self.label[variable_idx] = line.replace("\'",
+                                                            '').replace("\n",
+                                                                        "")
+                    break
+
+    def to_excel(self, *args):
+        """
+        Dump all the data to excel, fname and path can be passed as args
+        """
+        path = os.getcwd()
+        fname = self.fname.replace(".tpl", "_tpl") + ".xlsx"
+        idxs = self.filter_data("")
+        for idx in idxs:
+            self.extract(idx)
+        data_df = pd.DataFrame(self.data)
+        data_df.columns = self.label.values()
+        data_df.insert(0, "Time [s]", self.time)
+        if len(args) > 0 and args[0] != "":
+            path = args[0]
+            if os.path.exists(path) == False:
+                os.mkdir(path)
+            data_df.to_excel(path + os.sep + fname)
+        else:
+            data_df.to_excel(self.path + os.sep + fname)
+
+
+class TplFile(Tpl):
     """
     read and parse one tpl file
     """
@@ -30,7 +127,7 @@ class TplFile(fa.Tpl):
         self.q_liq_m3day = 0
         self.q_gas_Mm3day = 0
         self.p_atm = 10
-        self.var_num = 0
+ #       self.var_num = 0
         self.file_name = filename
         self.tpl_split = re.compile(r'\'*\s*\'', re.IGNORECASE)
  #       self.dict = {}
@@ -93,55 +190,6 @@ class TplFile(fa.Tpl):
         return self.data_trends
 
 
-"""
-    def trend_min(self, ppnm, keyname):
-        return self.getTrend(ppnm, keyname)[20:].min()
-
-    def trend_max(self, ppnm, keyname):
-        return self.getTrend(ppnm, keyname)[20:].max()
-
-    def trend_mean(self, ppnm, keyname):
-        return self.getTrend(ppnm, keyname)[20:].mean()
-
-
-    def read_points(self):
-        '''
-        reads all the data for all points  with ppnm (pipename)
-        obsolete
-        '''
-        i = 0
-        for ppnm in self.pipe_list:
-            self.indlist = list(self.fd[self.fd['pipenum'] == ppnm].T)  # get index list with needed point
-            self.tpl = fa.Tpl(self.fName)  # reread file and clear all data
-            for ind in self.indlist:
-                self.tpl.extract(ind)
-            self.dfm = pd.DataFrame(self.tpl.data, index=self.tpl.time)
-            self.dfm.columns = list(self.key_list)
-            self.dict.update({ppnm: self.dfm})
-            self.df.set_value(i, 'pipename', ppnm)
-            #     self.df.set_value(i,'key_list',[self.key_list])
-            i = i + 1
-            #     print(ppnm + '  done')
-        #        self.dfm['pipeName'] = ppnm   # add column with pipe name
-
-    def getTrend(self, ppnm, keyname):
-        '''
-        return trend by point name and keyname 
-        '''
-        return self.dict[ppnm][keyname]
-
-    def getMin(self, ppnm, keyname):
-        return self.getTrend(ppnm, keyname)[20:].min()
-
-    def getMax(self, ppnm, keyname):
-        return self.getTrend(ppnm, keyname)[20:].max()
-
-    def getMean(self, ppnm, keyname):
-        return self.getTrend(ppnm, keyname)[20:].mean()
-
-"""
-
-
 class TplParams:
     """
     class read all data from parametric study
@@ -163,9 +211,9 @@ class TplParams:
         self.file_list = {}
         self.qliqlist = set()
         self.qgaslist = set()
-        self.plist = set()
+        self.plist = []
         self.df = pd.DataFrame()
-        self.dfsuper = pd.DataFrame()
+        self.df_super = pd.DataFrame()
         self.key_list = ['HOLEXP', 'USFEXP', 'USL', 'USG']
         self.pipe_list = ['Pipe-3']
         self.flSplit = re.compile(r'[-,\s,\.]',re.IGNORECASE)
@@ -177,25 +225,83 @@ class TplParams:
         self.weight_kgm = 200  # удельный вес трубы
 
     def read_data(self):
+        """
+        read all files
+        tries to get params from file names
+        :return:
+        """
         for file in self.files:  # iterating through all files
-            par = self.flSplit.split(file)
-            #print(par)
-            fl_read = TplFile(file)  # read file
-            fl_read.q_liq_m3day = float(par[2])
-            fl_read.q_gas_Mm3day = float(par[4])
-            fl_read.p_atm = float(par[6])
-            fl_read.get_trend(self.key_list, self.pipe_list)
-            self.file_list.update({self.file_num: fl_read})  # put reader object to dictionary
-            print(file + ' read done')
-            self.file_num = self.file_num + 1
+            try:
+                par = self.flSplit.split(file)
+                fl_read = TplFile(file)                           # read file
+                fl_read.q_liq_m3day = float(par[2])
+                fl_read.q_gas_Mm3day = float(par[4])
+                fl_read.p_atm = float(par[6])
+                fl_read.get_trend(self.key_list, self.pipe_list)
+                self.file_list.update({self.file_num: fl_read})  # put reader object to dictionary
+                print(file + ' read done')
+                self.file_num = self.file_num + 1
+                self.plist.append(fl_read.p_atm)
+            except Exception:
+                print(file + ' read failed')
+                # here can be some potential error - need better get exception
         df_list = []
         for df in self.file_list.values():
             df_list.append(df.data_trends_summary)
         self.df = pd.concat(df_list)
         print('read done')
 
-    def collect_data(self):
+    def calc_data(self):
+        """
+        recalculate main DataFrame into table with
+        row - some point (file) with point, q_liq, q_gas, p and slug_vel mech_factor params
+        :return:
+        """
+        agr_type = ['mean', 'min', 'max']
+        self.df_super = pd.pivot_table(self.df,
+                                       values=['mean', 'max', 'min'],
+                                       index=['point', 'q_liq', 'q_gas', 'p_end'],
+                                       columns=['key'])
+        self.df_super = self.df_super.reset_index()
+        """
+        calc additional data needed to calculate all params
+        """
+        ''' superficial mixture velocity - min, mean, max '''
+        for agr in agr_type:
+            self.df_super[agr, 'USM'] = self.df_super[agr, 'USG'] + self.df_super[agr, 'USL']
+        """ slug velocity """
+        self.df_super['slug_velocity'] = self.df_super['max','USFEXP']
+        self.df_super['slug_holdup'] = self.df_super['max','HOLEXP'] - self.df_super['min','HOLEXP']
+        self.df_super['mech'] = forceFraction(self.df_super[agr, 'USM'],     
+                                              800*self.df_super['slug_holdup'] )
         return 1
+
+
+    def get_matr_ql_qg(self, pipe = 0 , p_end = 0 , val='mech'):
+
+        """
+        convert data read to some format
+        :param q_l:
+        :param q_g:
+        :param key:
+        :param pipe:
+        :return:
+        """
+#        return self.df_super.query('q_gas ==' + q_g
+#                                   + ' & q_liq == ' + q_l).T.query('key == \'' + key +'\'').T
+        if type(pipe) == int:
+            pipe = self.pipe_list[pipe]
+        if type(p_end) == int:
+            p_end = self.plist[p_end]                            
+        df1 = pd.pivot_table(self.df_super,index=['point','p_end','q_liq'],columns=['q_gas'],values=val)
+        df1.columns = df1.columns.droplevel(0)
+        df1 = df1.reset_index()
+        df1.index = df1.q_liq
+        df1 = df1[df1.point == pipe]
+        df1 = df1[df1.p_end == p_end]
+        df1 = df1.drop(['point','p_end','q_liq'],1)
+        
+        return df1
 
     def calcData(self):
         i = 0
@@ -357,8 +463,7 @@ def elbowForce_kN(vel_ms, rho_kgm3=800, ID_mm=800, Theta_deg=90, Hlslug=1, Hlfil
     DLF = 1
     Area_m2 = 3.14 / 4 * (ID_mm / 1000) ** 2
     Theta_rad = Theta_deg / 180 * 3.14
-    xForce_N = DLF * rho_kgm3 * (Hlslug - Hlfilm) * vel_ms ** 2 * Area_m2 * math.sin(
-        Theta_rad)  # (2 * (1 - Cos(Theta_rad))) ^ (0.5)
+    xForce_N = DLF * rho_kgm3 * (Hlslug - Hlfilm) * vel_ms ** 2 * Area_m2 * np.sin(Theta_rad)  # (2 * (1 - Cos(Theta_rad))) ^ (0.5)
     return xForce_N / 1000
 
 
