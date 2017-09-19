@@ -187,6 +187,18 @@ class TplFile(Tpl):
         self.data_trends_summary['q_gas'] = self.q_gas_Mm3day
         self.data_trends_summary['p_end'] = self.p_atm
         return self.data_trends_summary
+    
+    def get_trends_super(self,pipe_list):
+        keys = ['HOLEXP', 'USFEXP', 'USL', 'USG', 'USTEXP']
+        df_super = pd.DataFrame()
+        for point in pipe_list:
+            df = self.get_trend(keys, [point])
+            df['SLUGVEL:'+point] = df['USFEXP:'+point]
+            df['SLUGHL:'+point]=df['HOLEXP:'+point] - df['HOLEXP:'+point].min()
+            df['MECH:'+point] = force_fraction(vel_ms=df['SLUGVEL:'+point], 
+                                              rho_kgm3=800 * df['SLUGHL:'+point])
+            df_super = pd.concat([df_super, df], axis=1)
+        return df_super
 
 class TplParams:
     """
@@ -318,7 +330,14 @@ class TplParams:
                                       + ' :p_end ' + str(self.file_list[file_num].p_atm)]
             out = pd.concat([out, a], axis=1)
         return out
-
+    
+    def get_trends_super(self, q_liq_list, q_gas_list, p_end_list, point_list):
+        n = self.get_number_tpl(q_liq_list, q_gas_list, p_end_list)
+        out = pd.DataFrame()
+        for file_num in n:
+            a = self.file_list[file_num].get_trends_super(point_list)
+            out = pd.concat([out, a], axis=1)
+        return out
 
 def elbow_force_kN(vel_ms, rho_kgm3=800, id_mm=800, theta_deg=90, holdup_slug=1, holdup_film=0.5):
     """
