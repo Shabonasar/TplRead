@@ -215,12 +215,12 @@ class TplParams:
         self.tpl_path = pathname
         self.file_name_mask = '*.tpl'
         self.files = glob(self.tpl_path + self.file_name_mask)
-        print(self.files)
+        print(len(self.files) , 'файла найдено.')
         self.count_files = 0  # number of cases loaded
         self.file_num = 0
         self.file_list = {}
-        self.qliqlist = set()
-        self.qgaslist = set()
+        self.qliq_list = set()
+        self.qgas_list = set()
         self.plist = []
         self.df = pd.DataFrame()
         self.df_super = pd.DataFrame()
@@ -250,14 +250,14 @@ class TplParams:
                 fl_read.q_liq_m3day = float(par[2])
                 fl_read.q_gas_Mm3day = float(par[4])
                 fl_read.p_atm = float(par[6])
-                fl_read.get_trend(self.key_list, self.pipe_list)
+                fl_read.get_trend(self.key_list, fl_read.pipe_list)
                 fl_read.get_trend_summary()
                 self.file_list.update({self.file_num: fl_read})     # put reader object to dictionary
                 self.plist.append(fl_read.p_atm)
                 self.num_table.loc[self.file_num] = [self.file_num, fl_read.q_liq_m3day,
                                                      fl_read.q_gas_Mm3day, fl_read.p_atm]
                 self.file_num = self.file_num + 1
-                print(file + ' read done')
+                print('.', end=' ')
             except Exception:
                 print(file + ' read failed')
                 # here can be some potential error - need better exception handler
@@ -265,6 +265,11 @@ class TplParams:
         for df in self.file_list.values():
             df_list.append(df.data_trends_summary)
         self.df = pd.concat(df_list)
+        self.pipe_list =  fl_read.pipe_list
+        self.key_list_all = fl_read.key_list
+        self.p_end_list = self.df['p_end'].unique()
+        self.qliq_list = self.df['q_liq'].unique()
+        self.qgas_list = self.df['q_gas'].unique()
         print('read done')
 
     def calc_data(self):
@@ -312,6 +317,7 @@ class TplParams:
         df1 = df1[df1.point == pipe]
         df1 = df1[df1.p_end == p_end]
         df1 = df1.drop(['point', 'p_end', 'q_liq'], 1)
+        df1 = df1.sort_index(ascending=False)
         return df1
     
     def get_number_tpl(self, q_liq_list, q_gas_list, p_end_list):
@@ -325,9 +331,13 @@ class TplParams:
         out = pd.DataFrame()
         for file_num in n:
             a = self.file_list[file_num].get_trend(key_list, point_list)
-            a.columns = [a.columns[0] + ' :q_liq ' + str(self.file_list[file_num].q_liq_m3day)
-                                      + ' :q_gas ' + str(self.file_list[file_num].q_gas_Mm3day)
-                                      + ' :p_end ' + str(self.file_list[file_num].p_atm)]
+            colname_list_new=[]
+            for colname in a.columns:
+                colname_list_new.append(colname 
+                                        + ' :q_liq ' + str(self.file_list[file_num].q_liq_m3day)
+                                        + ' :q_gas ' + str(self.file_list[file_num].q_gas_Mm3day)
+                                        + ' :p_end ' + str(self.file_list[file_num].p_atm))
+            a.columns = colname_list_new        
             out = pd.concat([out, a], axis=1)
         return out
     

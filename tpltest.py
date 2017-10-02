@@ -12,7 +12,7 @@ filename1 = '3.tpl'
 t = tp.TplParams('tpl/')
 t.read_data()
 t.calc_data()
-print(t.df_super)
+#print(t.df_super)
 #print(t.get_matrix(key='USG', pipe='Pipe-3', q_g='5.0', q_l='5000.0', p_end='10.0'))
 
 
