@@ -292,10 +292,15 @@ class TplParams:
             self.df_super[agr, 'USM'] = self.df_super[agr, 'USG'] + self.df_super[agr, 'USL']
         """ slug velocity """
         self.df_super['slug_velocity'] = self.df_super['max', 'USFEXP']
-        self.df_super['slug_holdup'] = self.df_super['max', 'HOLEXP'] - self.df_super['min', 'HOLEXP']
-        self.df_super['mech'] = force_fraction(self.df_super['max', 'USM'],
-                                               800 * self.df_super['slug_holdup'])
+        self.df_super['slug_holdup'] = self.df_super['max', 'HOLEXP']
+        self.df_super['film_holdup'] = self.df_super['min', 'HOLEXP']
+        self.df_super['slug_delta_holdup'] = self.df_super['slug_holdup'] - self.df_super['film_holdup'] 
+        self.df_super['mech'] = force_fraction(vel_ms=self.df_super['slug_velocity'],
+                                               rho_kgm3=800,
+                                               holdup_slug=self.df_super['slug_holdup'],
+                                               holdup_film=self.df_super['film_holdup'])
         return 1
+
 
     def get_matr_ql_qg(self, pipe=0, p_end=0, val='mech'):
 
@@ -348,6 +353,9 @@ class TplParams:
             a = self.file_list[file_num].get_trends_super(point_list)
             out = pd.concat([out, a], axis=1)
         return out
+    
+    #def calc_data_new(self):
+    #    self.df_super = self.get_trends_super()
 
 def elbow_force_kN(vel_ms, rho_kgm3=800, id_mm=800, theta_deg=90, holdup_slug=1, holdup_film=0.5):
     """
