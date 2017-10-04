@@ -15,8 +15,8 @@ import pandas as pd
 from glob import glob
 import numpy as np
 import re
-
-
+import warnings
+warnings.filterwarnings("ignore")
 """
 Tpl class   from pyfas 
 """
@@ -178,9 +178,9 @@ class TplFile(Tpl):
     def get_trend_summary(self):
         """calculate summary data on trends extracted"""
         self.data_trends_summary = pd.DataFrame()
-        self.data_trends_summary['mean'] = self.data_trends.mean()
-        self.data_trends_summary['min'] = self.data_trends[20:].min()
-        self.data_trends_summary['max'] = self.data_trends.max()
+        self.data_trends_summary['mean'] = self.data_trends[400:].mean()
+        self.data_trends_summary['min'] = self.data_trends[400:].min()
+        self.data_trends_summary['max'] = self.data_trends[400:].max()
         self.data_trends_summary['key'] = self.data_trends.columns.str.split(pat=':').str[0]
         self.data_trends_summary['point'] = self.data_trends.columns.str.split(":").str[1]
         self.data_trends_summary['q_liq'] = self.q_liq_m3day
@@ -270,7 +270,7 @@ class TplParams:
         self.p_end_list = self.df['p_end'].unique()
         self.qliq_list = self.df['q_liq'].unique()
         self.qgas_list = self.df['q_gas'].unique()
-        print('read done')
+        print('read done.')
 
     def calc_data(self):
         """
@@ -299,7 +299,7 @@ class TplParams:
                                                rho_kgm3=800,
                                                holdup_slug=self.df_super['slug_holdup'],
                                                holdup_film=self.df_super['film_holdup'])
-        return 1
+        print('calc done.')
 
 
     def get_matr_ql_qg(self, pipe=0, p_end=0, val='mech'):
@@ -311,10 +311,11 @@ class TplParams:
         :param val:
         :return:
         """
+            
         if type(pipe) == int:
             pipe = self.pipe_list[pipe]
-        if type(p_end) == int:
-            p_end = self.plist[p_end]                            
+        if p_end == 0:
+            p_end = self.p_end_list[p_end]                            
         df1 = pd.pivot_table(self.df_super, index=['point', 'p_end', 'q_liq'], columns=['q_gas'], values=val)
         df1.columns = df1.columns.droplevel(0)
         df1 = df1.reset_index()
@@ -385,3 +386,36 @@ def force_fraction(vel_ms, rho_kgm3=800, id_mm=800, weight_kgm=200, theta_deg=90
     ef = elbow_force_kN(vel_ms, rho_kgm3, id_mm, theta_deg, holdup_slug, holdup_film)
     cf = crit_force_kN(weight_kgm, rho_kgm3, id_mm, holdup_slug, length_pipe_m)
     return ef / cf
+
+"""для рисования"""
+def sublist(list_in,ind_list):
+    if type(ind_list) == int: 
+        list_out = []
+        list_out.append(list_in[ind_list])
+    if type(ind_list) == list: 
+        list_out = [list_in[i] for i in ind_list]
+    return list_out
+
+def plot_trend(tpl, klist=['HOL'], pipe_num=0, p_num=0, qg_num=0, ql_num=0):
+    pipe = sublist(tpl.pipe_list, pipe_num)
+    pend = sublist(tpl.p_end_list, p_num)
+    qg = sublist(tpl.qgas_list, qg_num)
+    ql = sublist(tpl.qliq_list, ql_num)
+    print(klist,pipe,' p_end = ', pend,' q_g = ', qg,' q_l = ', ql)
+    return tpl.get_trend(key_list=klist, p_end_list=pend, point_list=pipe, q_gas_list=qg, q_liq_list=ql)
+
+def plot_trend_super(tpl, klist=['MECH'], pipe_num=0, p_num=0, qg_num=0, ql_num=0):
+    pipe = sublist(tpl.pipe_list, pipe_num)
+    pend = sublist(tpl.p_end_list, p_num)
+    qg = sublist(tpl.qgas_list, qg_num)
+    ql = sublist(tpl.qliq_list, ql_num)
+    kk=[]
+    for key in klist:
+        k = [key+':'+pp for pp in pipe]
+        kk = kk + k
+    print(k,pipe,' p_end = ', pend,' q_g = ', qg,' q_l = ', ql)
+    return tpl.get_trends_super(point_list=pipe, p_end_list=pend, q_gas_list=qg, q_liq_list=ql)[k]
+
+
+
+
