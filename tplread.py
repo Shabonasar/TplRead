@@ -178,9 +178,9 @@ class TplFile(Tpl):
     def get_trend_summary(self):
         """calculate summary data on trends extracted"""
         self.data_trends_summary = pd.DataFrame()
-        self.data_trends_summary['mean'] = self.data_trends[400:].mean()
-        self.data_trends_summary['min'] = self.data_trends[400:].min()
-        self.data_trends_summary['max'] = self.data_trends[400:].max()
+        self.data_trends_summary['mean'] = self.data_trends[1300:].mean()
+        self.data_trends_summary['min'] = self.data_trends[1300:].min()
+        self.data_trends_summary['max'] = self.data_trends[1300:].max()
         self.data_trends_summary['key'] = self.data_trends.columns.str.split(pat=':').str[0]
         self.data_trends_summary['point'] = self.data_trends.columns.str.split(":").str[1]
         self.data_trends_summary['q_liq'] = self.q_liq_m3day
@@ -362,7 +362,7 @@ def elbow_force_kN(vel_ms, rho_kgm3=800, id_mm=800, theta_deg=90, holdup_slug=1,
     """
     Расчет усилия действующего на сгиб трубы
     """
-    DLF = 1
+    DLF = 2
     area_m2 = 3.14 / 4 * (id_mm / 1000) ** 2
     theta_rad = theta_deg / 180 * 3.14
     x_force__n = DLF * rho_kgm3 * (holdup_slug - holdup_film) * vel_ms ** 2 * area_m2 * np.sin(theta_rad)
