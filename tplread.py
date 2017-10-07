@@ -14,6 +14,8 @@ import os
 import pandas as pd
 from glob import glob
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 import re
 import warnings
 warnings.filterwarnings("ignore")
@@ -170,7 +172,7 @@ class TplFile(Tpl):
             for key in key_list:
                 try:
                     key1 = key + ":" + pipe
-                    self.data_trends[key1] = self.df.filter(like=key+" ").filter(like=pipe).values
+                    self.data_trends[key1] = self.df.filter(like=key+" ").filter(like=pipe+" ").values
                 except Exception:
                     print('Error ' + key1)
         return self.data_trends
@@ -178,9 +180,9 @@ class TplFile(Tpl):
     def get_trend_summary(self):
         """calculate summary data on trends extracted"""
         self.data_trends_summary = pd.DataFrame()
-        self.data_trends_summary['mean'] = self.data_trends[1300:].mean()
-        self.data_trends_summary['min'] = self.data_trends[1300:].min()
-        self.data_trends_summary['max'] = self.data_trends[1300:].max()
+        self.data_trends_summary['mean'] = self.data_trends[1:].mean()
+        self.data_trends_summary['min'] = self.data_trends[1:].min()
+        self.data_trends_summary['max'] = self.data_trends[1:].max()
         self.data_trends_summary['key'] = self.data_trends.columns.str.split(pat=':').str[0]
         self.data_trends_summary['point'] = self.data_trends.columns.str.split(":").str[1]
         self.data_trends_summary['q_liq'] = self.q_liq_m3day
@@ -224,7 +226,7 @@ class TplParams:
         self.plist = []
         self.df = pd.DataFrame()
         self.df_super = pd.DataFrame()
-        self.key_list = ['HOLEXP', 'USFEXP', 'USL', 'USG']
+        self.key_list = ['HOLEXP', 'USFEXP', 'USTEXP', 'USL', 'USG', 'LSBEXP', 'LSLEXP' ]
         self.pipe_list = ['Pipe-3']
         self.flSplit = re.compile(r'[-,\s.]', re.IGNORECASE)
         self.num_table = pd.DataFrame()
@@ -291,9 +293,14 @@ class TplParams:
         for agr in agr_type:
             self.df_super[agr, 'USM'] = self.df_super[agr, 'USG'] + self.df_super[agr, 'USL']
         """ slug velocity """
-        self.df_super['slug_velocity'] = self.df_super['max', 'USFEXP']
+        self.df_super['slug_velocity_front'] = self.df_super['max', 'USFEXP']
+        self.df_super['slug_velocity_tail'] = self.df_super['max', 'USTEXP']
+        self.df_super['slug_velocity'] = 0.5 * (self.df_super['slug_velocity_front'] + 
+                                         self.df_super['slug_velocity_tail'])
+        self.df_super['slug_length'] = self.df_super['mean', 'LSLEXP']
+        self.df_super['bubble_length'] = self.df_super['mean', 'LSBEXP']
         self.df_super['slug_holdup'] = self.df_super['max', 'HOLEXP']
-        self.df_super['film_holdup'] = self.df_super['min', 'HOLEXP']
+        self.df_super['film_holdup'] = self.df_super['mean', 'HOLEXP']
         self.df_super['slug_delta_holdup'] = self.df_super['slug_holdup'] - self.df_super['film_holdup'] 
         self.df_super['mech'] = force_fraction(vel_ms=self.df_super['slug_velocity'],
                                                rho_kgm3=800,
@@ -362,7 +369,7 @@ def elbow_force_kN(vel_ms, rho_kgm3=800, id_mm=800, theta_deg=90, holdup_slug=1,
     """
     Расчет усилия действующего на сгиб трубы
     """
-    DLF = 2
+    DLF = 1
     area_m2 = 3.14 / 4 * (id_mm / 1000) ** 2
     theta_rad = theta_deg / 180 * 3.14
     x_force__n = DLF * rho_kgm3 * (holdup_slug - holdup_film) * vel_ms ** 2 * area_m2 * np.sin(theta_rad)
