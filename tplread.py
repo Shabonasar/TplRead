@@ -230,6 +230,7 @@ class TplParams:
         self.pipe_list = ['Pipe-3']
         self.flSplit = re.compile(r'[-,\s.]', re.IGNORECASE)
         self.num_table = pd.DataFrame()
+        self.name = ''
         """
         параметры трубы
         """
@@ -297,7 +298,8 @@ class TplParams:
         self.df_super['slug_velocity_tail'] = self.df_super['max', 'USTEXP']
         self.df_super['slug_velocity'] = 0.5 * (self.df_super['slug_velocity_front'] + 
                                          self.df_super['slug_velocity_tail'])
-        self.df_super['slug_length'] = self.df_super['mean', 'LSLEXP']
+        df = self.df_super['max', 'LSLEXP']
+        self.df_super['slug_length'] = df #[df>0].mean()
         self.df_super['bubble_length'] = self.df_super['mean', 'LSBEXP']
         self.df_super['slug_holdup'] = self.df_super['max', 'HOLEXP']
         self.df_super['film_holdup'] = self.df_super['mean', 'HOLEXP']
@@ -408,7 +410,7 @@ def plot_trend(tpl, klist=['HOL'], pipe_num=0, p_num=0, qg_num=0, ql_num=0):
     pend = sublist(tpl.p_end_list, p_num)
     qg = sublist(tpl.qgas_list, qg_num)
     ql = sublist(tpl.qliq_list, ql_num)
-    print(klist,pipe,' p_end = ', pend,' q_g = ', qg,' q_l = ', ql)
+    print(tpl.name, klist,pipe,' p_end = ', pend,' q_g = ', qg,' q_l = ', ql)
     return tpl.get_trend(key_list=klist, p_end_list=pend, point_list=pipe, q_gas_list=qg, q_liq_list=ql)
 
 def plot_trend_super(tpl, klist=['MECH'], pipe_num=0, p_num=0, qg_num=0, ql_num=0):
@@ -420,9 +422,90 @@ def plot_trend_super(tpl, klist=['MECH'], pipe_num=0, p_num=0, qg_num=0, ql_num=
     for key in klist:
         k = [key+':'+pp for pp in pipe]
         kk = kk + k
-    print(k,pipe,' p_end = ', pend,' q_g = ', qg,' q_l = ', ql)
+    print(tpl.name, k,pipe,' p_end = ', pend,' q_g = ', qg,' q_l = ', ql)
     return tpl.get_trends_super(point_list=pipe, p_end_list=pend, q_gas_list=qg, q_liq_list=ql)[k]
 
 
+def plot_map(pl1, pl2 ,i, pend=10, val='mech', vm = 5, titl = ''):
+    print('Контрольная точка ',pl1.pipe_list[i], pl2.pipe_list[i], ' давление = ', str(pend), 
+          ' атм ')
+    
+    AA = plt.figure(figsize=(17, 6), dpi=70)
+    AA.add_subplot(121)
+    
+    #print('Карта для для плоского трубопровода')
+    plt.title('Карта для для плоского трубопровода.' + titl)
+    a=pl1.get_matr_ql_qg(pipe=pl1.pipe_list[i],p_end=pend,val=val)     # расчет карты по данным моделирования
+    sns.heatmap(a, annot=True,cmap="Reds", vmin=0, vmax=vm, linewidths=.5)     # построение визуального представления карты
+    plt.yticks(rotation="horizontal")
+    
+    AA.add_subplot(122)
+    #print('Карта трубопровода с "рельефом"') 
+    plt.title('Карта трубопровода с "рельефом".'+ titl)
+    b=pl2.get_matr_ql_qg(pipe=pl2.pipe_list[i],p_end=pend,val=val)      # расчет карты по данным моделирования
+    sns.heatmap(b, annot=True,cmap="Greens", vmin=0, vmax=vm, linewidths=.5)    # построение визуального представления карты
+    plt.yticks(rotation="horizontal")
+    AA.show()
+    plt.show()
+    
+    AA = plt.figure(figsize=(17, 6), dpi=70)
+    AA.add_subplot(121)
+    print('Карта отношений степени воздействия.'+ titl)
+    plt.title('Карта отношений. '+ titl)
+    c = b / a 
+    sns.heatmap(c, annot=True,  cmap='Blues', vmin=0, vmax=3, linewidths=.5)
+    plt.show()
+  
+     # Нахождение максимального элемента на карте плоского трубопровода
+    a_max = a.max().max()             # максимальное значение
+    a_i = a.max(axis=1).idxmax()      # дебит по жидкости
+    a_j = a.max(axis=0).idxmax()      # дебит по газу
+    a_i_idx = a.shape[0]-1 - a.index.get_loc(a_i)    # индекс дебита по жидкости
+    a_j_idx = a.columns.get_loc(a_j)  # индекс дебита по газу
+
+    # Нахождение максимального элемента на карте трубопровода с перепадами высот
+    b_max = b.max().max()             # максимальное значение
+    b_i = b.max(axis=1).idxmax()      # дебит по жидкости
+    b_j = b.max(axis=0).idxmax()      # дебит по газу
+    b_i_idx = b.shape[0]-1 - b.index.get_loc(b_i)    # индекс дебита по жидкости
+    b_j_idx = b.columns.get_loc(b_j)  # индекс дебита по газу
+    return (a_max, a_i_idx, a_j_idx, b_max , b_i_idx, b_j_idx)
+
+# вспомогательная функция для поиска номера трубы в списке
+def ipipe(tpl,pp):
+    pipe_ind = tpl.pipe_list.tolist().index(pp)
+    return pipe_ind
+
+def plot_trend_example(pl1, pl2 ,k,qg,ql,pp,p):
+    AA = plt.figure(figsize=(17, 6), dpi=70)
+    
+    AA.add_subplot(121)
+    plt.title('труба плоская. '+ str(k))
+    d1=plot_trend(pl1,klist=k,qg_num=qg, ql_num=ql,pipe_num=pp,p_num=p)[4:]
+    plt.plot(d1)
+    plt.yticks(rotation="horizontal")
+    
+    AA.add_subplot(122)
+    plt.title('труба с "рельефом". '+ str(k))
+    d2=plot_trend(pl2,klist=k,qg_num=qg, ql_num=ql,pipe_num=pp,p_num=p)[4:]
+    plt.plot(d2)
+    plt.yticks(rotation="horizontal")
+    AA.show()
+    plt.show()
+    
+def plot_trend_super_example(pl1, pl2 , qg,ql,pp,p):    
+    AA = plt.figure(figsize=(17, 6), dpi=70)
+    AA.add_subplot(121)
+    plt.title('труба плоская. Мех. влияние')
+    d3 = plot_trend_super(pl1,qg_num=qg, ql_num=ql,pipe_num=pp,p_num=p)
+    plt.plot(d3)
+    plt.yticks(rotation="horizontal")
+    AA.add_subplot(122)
+    plt.title('труба с "рельефом". Мех. влияние')
+    d4 = plot_trend_super(pl2,qg_num=qg, ql_num=ql,pipe_num=pp,p_num=p)
+    plt.plot(d4)
+    plt.yticks(rotation="horizontal")
+    AA.show()
+    plt.show()
 
 
