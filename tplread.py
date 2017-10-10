@@ -176,14 +176,15 @@ class TplFile(Tpl):
                     self.data_trends[key1] = self.df.filter(like=key+" ").filter(like=pipe+" ").values
                 except Exception:
                     print('Error ' + key1)
+        self.data_trends = self.data_trends[1000:]
         return self.data_trends
 
     def get_trend_summary(self):
         """calculate summary data on trends extracted"""
         self.data_trends_summary = pd.DataFrame()
-        self.data_trends_summary['mean'] = self.df_super[1:].mean()
-        self.data_trends_summary['min'] = self.df_super[1:].min()
-        self.data_trends_summary['max'] = self.df_super[1:].max()
+        self.data_trends_summary['mean'] = self.df_super[1000:].mean()
+        self.data_trends_summary['min'] = self.df_super[1000:].min()
+        self.data_trends_summary['max'] = self.df_super[1000:].max()
         self.data_trends_summary['key'] = self.df_super.columns.str.split(pat=':').str[0]
         self.data_trends_summary['point'] = self.df_super.columns.str.split(":").str[1]
         self.data_trends_summary['q_liq'] = self.q_liq_m3day
