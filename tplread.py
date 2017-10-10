@@ -18,11 +18,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 import warnings
-warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore")   # supress warnings in notebook output 
+
 """
 Tpl class   from pyfas 
 """
-
 
 class Tpl:
     """
@@ -195,7 +195,7 @@ class TplFile(Tpl):
         """
         method extractr trends for specific keys and add calculated fileds to it
         """
-        keys = ['HOLEXP', 'USFEXP', 'USL', 'USG', 'USTEXP', 'LSBEXP', 'LSLEXP']
+        keys = ['HOLEXP', 'USFEXP', 'USL', 'USG', 'USTEXP', 'LSBEXP', 'LSLEXP', 'PT']
         self.df_super = pd.DataFrame()
         for point in pipe_list:
             df = self.get_trend(keys, [point])
@@ -206,7 +206,6 @@ class TplFile(Tpl):
             df['MECH:'+point] = force_fraction(vel_ms=df['SLUGVEL:'+point], 
                                               rho_kgm3=800 * df['SLUGHL:'+point])
             self.df_super = pd.concat([self.df_super, df], axis=1)
-        #print('^', end=' ')
         return self.df_super 
 
 class TplParams:
@@ -316,6 +315,7 @@ class TplParams:
                               #                 rho_kgm3=800,
                               #                 holdup_slug=self.df_super['slug_holdup'],
                               #                 holdup_film=self.df_super['film_holdup'])
+        self.df_super['pressure'] = self.df_super['mean', 'PT'] / 101325
         print('calc done.')
 
 
@@ -384,7 +384,7 @@ def elbow_force_kN(vel_ms, rho_kgm3=800, id_mm=800, theta_deg=90, holdup_slug=1,
     """
     Расчет усилия действующего на сгиб трубы
     """
-    DLF = 1
+    DLF = 2
     area_m2 = 3.14 / 4 * (id_mm / 1000) ** 2
     theta_rad = theta_deg / 180 * 3.14
     x_force__n = DLF * rho_kgm3 * (holdup_slug - holdup_film) * vel_ms ** 2 * area_m2 * np.sin(theta_rad)
