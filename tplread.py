@@ -18,11 +18,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 import warnings
-warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore")   # supress warnings in notebook output 
+
 """
 Tpl class   from pyfas 
 """
-
 
 class Tpl:
     """
@@ -132,6 +132,7 @@ class TplFile(Tpl):
         self.file_name = filename
         self.tpl_split = re.compile(r'\'*\s*\'', re.IGNORECASE)
         self.df = pd.DataFrame()
+        self.df_super = pd.DataFrame()
         params = self.filter_data('PIPE:')  # get all trends with PIPE:
         for i in params:
             params.update({i: self.tpl_split.split(params[i])})
@@ -175,32 +176,38 @@ class TplFile(Tpl):
                     self.data_trends[key1] = self.df.filter(like=key+" ").filter(like=pipe+" ").values
                 except Exception:
                     print('Error ' + key1)
+        self.data_trends = self.data_trends[1000:]
         return self.data_trends
 
     def get_trend_summary(self):
         """calculate summary data on trends extracted"""
         self.data_trends_summary = pd.DataFrame()
-        self.data_trends_summary['mean'] = self.data_trends[1:].mean()
-        self.data_trends_summary['min'] = self.data_trends[1:].min()
-        self.data_trends_summary['max'] = self.data_trends[1:].max()
-        self.data_trends_summary['key'] = self.data_trends.columns.str.split(pat=':').str[0]
-        self.data_trends_summary['point'] = self.data_trends.columns.str.split(":").str[1]
+        self.data_trends_summary['mean'] = self.df_super[1000:].mean()
+        self.data_trends_summary['min'] = self.df_super[1000:].min()
+        self.data_trends_summary['max'] = self.df_super[1000:].max()
+        self.data_trends_summary['key'] = self.df_super.columns.str.split(pat=':').str[0]
+        self.data_trends_summary['point'] = self.df_super.columns.str.split(":").str[1]
         self.data_trends_summary['q_liq'] = self.q_liq_m3day
         self.data_trends_summary['q_gas'] = self.q_gas_Mm3day
         self.data_trends_summary['p_end'] = self.p_atm
         return self.data_trends_summary
     
     def get_trends_super(self,pipe_list):
-        keys = ['HOLEXP', 'USFEXP', 'USL', 'USG', 'USTEXP']
-        df_super = pd.DataFrame()
+        """
+        method extractr trends for specific keys and add calculated fileds to it
+        """
+        keys = ['HOLEXP', 'USFEXP', 'USL', 'USG', 'USTEXP', 'LSBEXP', 'LSLEXP', 'PT']
+        self.df_super = pd.DataFrame()
         for point in pipe_list:
             df = self.get_trend(keys, [point])
-            df['SLUGVEL:'+point] = df['USFEXP:'+point]
-            df['SLUGHL:'+point]=df['HOLEXP:'+point] - df['HOLEXP:'+point].min()
+            df['SLUGVEL:'+point] = (df['USFEXP:'+point]+df['USTEXP:'+point])*0.5
+            dft = df['HOLEXP:'+point]- df['HOLEXP:'+point].mean()
+            dft[dft<0] = 0
+            df['SLUGHL:'+point]=dft
             df['MECH:'+point] = force_fraction(vel_ms=df['SLUGVEL:'+point], 
                                               rho_kgm3=800 * df['SLUGHL:'+point])
-            df_super = pd.concat([df_super, df], axis=1)
-        return df_super
+            self.df_super = pd.concat([self.df_super, df], axis=1)
+        return self.df_super 
 
 class TplParams:
     """
@@ -230,6 +237,7 @@ class TplParams:
         self.pipe_list = ['Pipe-3']
         self.flSplit = re.compile(r'[-,\s.]', re.IGNORECASE)
         self.num_table = pd.DataFrame()
+        self.name = ''
         """
         параметры трубы
         """
@@ -252,7 +260,7 @@ class TplParams:
                 fl_read.q_liq_m3day = float(par[2])
                 fl_read.q_gas_Mm3day = float(par[4])
                 fl_read.p_atm = float(par[6])
-                fl_read.get_trend(self.key_list, fl_read.pipe_list)
+                fl_read.get_trends_super(fl_read.pipe_list)
                 fl_read.get_trend_summary()
                 self.file_list.update({self.file_num: fl_read})     # put reader object to dictionary
                 self.plist.append(fl_read.p_atm)
@@ -297,15 +305,18 @@ class TplParams:
         self.df_super['slug_velocity_tail'] = self.df_super['max', 'USTEXP']
         self.df_super['slug_velocity'] = 0.5 * (self.df_super['slug_velocity_front'] + 
                                          self.df_super['slug_velocity_tail'])
-        self.df_super['slug_length'] = self.df_super['mean', 'LSLEXP']
+        df = self.df_super['max', 'LSLEXP']
+        self.df_super['slug_length'] = df #[df>0].mean()
         self.df_super['bubble_length'] = self.df_super['mean', 'LSBEXP']
         self.df_super['slug_holdup'] = self.df_super['max', 'HOLEXP']
         self.df_super['film_holdup'] = self.df_super['mean', 'HOLEXP']
-        self.df_super['slug_delta_holdup'] = self.df_super['slug_holdup'] - self.df_super['film_holdup'] 
-        self.df_super['mech'] = force_fraction(vel_ms=self.df_super['slug_velocity'],
-                                               rho_kgm3=800,
-                                               holdup_slug=self.df_super['slug_holdup'],
-                                               holdup_film=self.df_super['film_holdup'])
+        self.df_super['slug_delta_holdup'] = self.df_super['max', 'SLUGHL']  #self.df_super['slug_holdup'] - self.df_super['film_holdup'] 
+        self.df_super['mech'] = self.df_super['max', 'MECH'] 
+                              #  force_fraction(vel_ms=self.df_super['slug_velocity'],
+                              #                 rho_kgm3=800,
+                              #                 holdup_slug=self.df_super['slug_holdup'],
+                              #                 holdup_film=self.df_super['film_holdup'])
+        self.df_super['pressure'] = self.df_super['mean', 'PT'] / 101325
         print('calc done.')
 
 
@@ -333,6 +344,10 @@ class TplParams:
         df1 = df1.sort_index(ascending=False)
         return df1
     
+    def get_matr_ql_qg_new(self, pipe=0, p_end=0, val='mech'):
+        df1 = pd.DataFrame()
+        
+        
     def get_number_tpl(self, q_liq_list, q_gas_list, p_end_list):
         nt = self.num_table
         out = nt[(nt.q_liq.isin(q_liq_list)) & (nt.q_gas.isin(q_gas_list)) & 
@@ -365,11 +380,12 @@ class TplParams:
     #def calc_data_new(self):
     #    self.df_super = self.get_trends_super()
 
-def elbow_force_kN(vel_ms, rho_kgm3=800, id_mm=800, theta_deg=90, holdup_slug=1, holdup_film=0.5):
+def elbow_force_kN(vel_ms, rho_kgm3=800, id_mm=800, theta_deg=90, holdup_slug=1, 
+                   holdup_film=0.5, slug_length = 100 ):
     """
     Расчет усилия действующего на сгиб трубы
     """
-    DLF = 1
+    DLF = 2
     area_m2 = 3.14 / 4 * (id_mm / 1000) ** 2
     theta_rad = theta_deg / 180 * 3.14
     x_force__n = DLF * rho_kgm3 * (holdup_slug - holdup_film) * vel_ms ** 2 * area_m2 * np.sin(theta_rad)
@@ -408,7 +424,7 @@ def plot_trend(tpl, klist=['HOL'], pipe_num=0, p_num=0, qg_num=0, ql_num=0):
     pend = sublist(tpl.p_end_list, p_num)
     qg = sublist(tpl.qgas_list, qg_num)
     ql = sublist(tpl.qliq_list, ql_num)
-    print(klist,pipe,' p_end = ', pend,' q_g = ', qg,' q_l = ', ql)
+    print(tpl.name, klist,pipe,' p_end = ', pend,' q_g = ', qg,' q_l = ', ql)
     return tpl.get_trend(key_list=klist, p_end_list=pend, point_list=pipe, q_gas_list=qg, q_liq_list=ql)
 
 def plot_trend_super(tpl, klist=['MECH'], pipe_num=0, p_num=0, qg_num=0, ql_num=0):
@@ -420,9 +436,90 @@ def plot_trend_super(tpl, klist=['MECH'], pipe_num=0, p_num=0, qg_num=0, ql_num=
     for key in klist:
         k = [key+':'+pp for pp in pipe]
         kk = kk + k
-    print(k,pipe,' p_end = ', pend,' q_g = ', qg,' q_l = ', ql)
+    print(tpl.name, k,pipe,' p_end = ', pend,' q_g = ', qg,' q_l = ', ql)
     return tpl.get_trends_super(point_list=pipe, p_end_list=pend, q_gas_list=qg, q_liq_list=ql)[k]
 
 
+def plot_map(pl1, pl2 ,i, pend=10, val='mech', vm = 5, titl = '', fmt = '.2f'):
+    print('Контрольная точка ',pl1.pipe_list[i], pl2.pipe_list[i], ' давление = ', str(pend), 
+          ' атм ')
+    
+    AA = plt.figure(figsize=(17, 6), dpi=70)
+    AA.add_subplot(121)
+    
+    #print('Карта для для плоского трубопровода')
+    plt.title('Карта для для плоского трубопровода.' + titl)
+    a=pl1.get_matr_ql_qg(pipe=pl1.pipe_list[i],p_end=pend,val=val)     # расчет карты по данным моделирования
+    sns.heatmap(a, annot=True, fmt = fmt,cmap="Reds", vmin=0, vmax=vm, linewidths=.5)     # построение визуального представления карты
+    plt.yticks(rotation="horizontal")
+    
+    AA.add_subplot(122)
+    #print('Карта трубопровода с "рельефом"') 
+    plt.title('Карта трубопровода с "рельефом".'+ titl)
+    b=pl2.get_matr_ql_qg(pipe=pl2.pipe_list[i],p_end=pend,val=val)      # расчет карты по данным моделирования
+    sns.heatmap(b, annot=True, fmt = fmt,cmap="Greens", vmin=0, vmax=vm, linewidths=.5)    # построение визуального представления карты
+    plt.yticks(rotation="horizontal")
+    AA.show()
+    plt.show()
+    
+    AA = plt.figure(figsize=(17, 6), dpi=70)
+    AA.add_subplot(121)
+    print('Карта отношений степени воздействия.'+ titl)
+    plt.title('Карта отношений. '+ titl)
+    c = b / a 
+    sns.heatmap(c, annot=True, fmt = fmt,  cmap='Blues', vmin=0, vmax=3, linewidths=.5)
+    plt.show()
+  
+     # Нахождение максимального элемента на карте плоского трубопровода
+    a_max = a.max().max()             # максимальное значение
+    a_i = a.max(axis=1).idxmax()      # дебит по жидкости
+    a_j = a.max(axis=0).idxmax()      # дебит по газу
+    a_i_idx = a.shape[0]-1 - a.index.get_loc(a_i)    # индекс дебита по жидкости
+    a_j_idx = a.columns.get_loc(a_j)  # индекс дебита по газу
+
+    # Нахождение максимального элемента на карте трубопровода с перепадами высот
+    b_max = b.max().max()             # максимальное значение
+    b_i = b.max(axis=1).idxmax()      # дебит по жидкости
+    b_j = b.max(axis=0).idxmax()      # дебит по газу
+    b_i_idx = b.shape[0]-1 - b.index.get_loc(b_i)    # индекс дебита по жидкости
+    b_j_idx = b.columns.get_loc(b_j)  # индекс дебита по газу
+    return (a_max, a_i_idx, a_j_idx, b_max , b_i_idx, b_j_idx)
+
+# вспомогательная функция для поиска номера трубы в списке
+def ipipe(tpl,pp):
+    pipe_ind = tpl.pipe_list.tolist().index(pp)
+    return pipe_ind
+
+def plot_trend_example(pl1, pl2 ,k,qg,ql,pp,p):
+    AA = plt.figure(figsize=(17, 6), dpi=70)
+    
+    AA.add_subplot(121)
+    plt.title('труба плоская. '+ str(k))
+    d1=plot_trend(pl1,klist=k,qg_num=qg, ql_num=ql,pipe_num=pp,p_num=p)[4:]
+    plt.plot(d1)
+    plt.yticks(rotation="horizontal")
+    
+    AA.add_subplot(122)
+    plt.title('труба с "рельефом". '+ str(k))
+    d2=plot_trend(pl2,klist=k,qg_num=qg, ql_num=ql,pipe_num=pp,p_num=p)[4:]
+    plt.plot(d2)
+    plt.yticks(rotation="horizontal")
+    AA.show()
+    plt.show()
+    
+def plot_trend_super_example(pl1, pl2 , qg,ql,pp,p):    
+    AA = plt.figure(figsize=(17, 6), dpi=70)
+    AA.add_subplot(121)
+    plt.title('труба плоская. Мех. влияние')
+    d3 = plot_trend_super(pl1,qg_num=qg, ql_num=ql,pipe_num=pp,p_num=p)
+    plt.plot(d3)
+    plt.yticks(rotation="horizontal")
+    AA.add_subplot(122)
+    plt.title('труба с "рельефом". Мех. влияние')
+    d4 = plot_trend_super(pl2,qg_num=qg, ql_num=ql,pipe_num=pp,p_num=p)
+    plt.plot(d4)
+    plt.yticks(rotation="horizontal")
+    AA.show()
+    plt.show()
 
 
